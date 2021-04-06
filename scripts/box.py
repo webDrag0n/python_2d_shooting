@@ -1,11 +1,12 @@
 # -*- coding: UTF-8 -*-
-from Box2D import *
+from enemyBehavior import enemyControl
+from coreBehavior import coreControl
+
+from Box2D import b2World, b2PolygonShape
 import pygame, sys, math, random
 from pygame.locals import *
 from picToMap import *
 
-from enemyBehavior import enemyControl
-from coreBehavior import coreControl
 
 block_size = 10
 gravity = 0
@@ -28,7 +29,7 @@ camera_1_y = pygame_screen_y - pygame_screen_y - 5
 pygame.init()
 
 # set up the window
-windowSurface = pygame.display.set_mode((pygame_screen_x, pygame_screen_y), FULLSCREEN)
+windowSurface = pygame.display.set_mode((pygame_screen_x, pygame_screen_y))
 pygame.display.set_caption("csproject 01 beta 1.0")
 mode = "menu"
 
@@ -104,8 +105,7 @@ mapArray = generateMap("..\\assets\\map\\map2.bmp")
 # setup terrain list
 terrainList = []
 # set up  box2d world
-world = b2World()
-world.__SetGravity((0, -gravity))
+world = b2World((0, -gravity))
 
 # create player class
 class player:
@@ -155,6 +155,7 @@ class player:
                 world.DestroyBody(self.bullet_list[0])
                 self.bullet_list = self.bullet_list[1:]
                 self.bullet_list.append(self.bullet)
+            self.bullet = None
             self.last_fire_time = 0
 
     # hited by enemy
@@ -181,9 +182,8 @@ def create_bullet(box_x_pos, box_y_pos):
 
 # function used to instantiate enemy
 def create_player_body(box_x_pos, box_y_pos):
-    body = world.CreateDynamicBody(position=(box_x_pos, box_y_pos))
+    body = world.CreateDynamicBody(position=(box_x_pos, box_y_pos), userData="player")
     body.fixedRotation = True
-    body.__SetUserData(data="player")
     tex = body.CreatePolygonFixture(box=(player_size_x / 2.0, player_size_y / 2.0), density=100, friction=0.9)
     tex.fixedRotation = True
     return body
@@ -196,8 +196,9 @@ def generateBlockFromMap(map):
                 block = world.CreateStaticBody(
                     position=(j * block_size, i * block_size),
                     shapes=b2PolygonShape(box=(block_size / 2, block_size / 2)),
+                    userData="block"
                 )
-                block.__SetUserData(data="block")
+                # block.SetUserData(data="block")
                 terrainList.append(block)
 
 generateBlockFromMap(mapArray)
@@ -245,42 +246,43 @@ def gameControl():
         mode = "menu"
 
 
-def gamePhysics():
+def boxPhysics():
     # get the objects that are colliding
-    contactList = world.__GetContactList_internal()
+    contactList = world.contacts
     # if there is objects colliding
     if contactList != None:
-        # colliding object a and b
-        bodyA = contactList.__GetFixtureA().__GetBody()
-        bodyB = contactList.__GetFixtureB().__GetBody()
-        # case that obj a is bullet
-        if bodyA.__GetUserData() == "bullet":
-            # destroy bullet
-            world.DestroyBody(bodyA)
-            # remove bullet from the bullet list in player
-            try:
-                core.bullet_list.remove(bodyA)
-            except:
-                enemy.bullet_list.remove(bodyA)
-            # if another object is a player
-            if bodyB == core.body:
-                core.hit(enemy.power)
-            elif bodyB == enemy.body:
-                enemy.hit(core.power)
-        # case that obj b is bullet
-        elif bodyB.__GetUserData() == "bullet":
-            # destroy bullet
-            world.DestroyBody(bodyB)
-            # remove bullet from the bullet list in player
-            try:
-                core.bullet_list.remove(bodyB)
-            except:
-                enemy.bullet_list.remove(bodyB)
-            # if another object is a player
-            if bodyA == core.body:
-                core.hit(enemy.power)
-            elif bodyA == enemy.body:
-                enemy.hit(core.power)
+        for contact in contactList:
+            # colliding object a and b
+            bodyA = contact.fixtureA.body
+            bodyB = contact.fixtureB.body
+            # case that obj a is bullet
+            if bodyA.userData == "bullet":
+                # destroy bullet
+                world.DestroyBody(bodyA)
+                # remove bullet from the bullet list in player
+                try:
+                    core.bullet_list.remove(bodyA)
+                except:
+                    enemy.bullet_list.remove(bodyA)
+                # if another object is a player
+                if bodyB == core.body:
+                    core.hit(enemy.power)
+                elif bodyB == enemy.body:
+                    enemy.hit(core.power)
+            # case that obj b is bullet
+            elif bodyB.userData == "bullet":
+                # destroy bullet
+                world.DestroyBody(bodyB)
+                # remove bullet from the bullet list in player
+                try:
+                    core.bullet_list.remove(bodyB)
+                except:
+                    enemy.bullet_list.remove(bodyB)
+                # if another object is a player
+                if bodyA == core.body:
+                    core.hit(enemy.power)
+                elif bodyA == enemy.body:
+                    enemy.hit(core.power)
 
     # get the camera coordinates as global variable
     global camera_1_y
@@ -288,9 +290,9 @@ def gamePhysics():
     
     # add gravity velocity
     if not core.isDead:
-        core.body.__SetLinearVelocity((core.body.__GetLinearVelocity()[0], core.body.__GetLinearVelocity()[1] - 10))
+        core.body.linearVelocity = (core.body.linearVelocity[0], core.body.linearVelocity[1] - 10)
     if not enemy.isDead:
-        enemy.body.__SetLinearVelocity((enemy.body.__GetLinearVelocity()[0], enemy.body.__GetLinearVelocity()[1] - 10))
+        enemy.body.linearVelocity = (enemy.body.linearVelocity[0], enemy.body.linearVelocity[1] - 10)
 
     # tick the time to perform physics effect        
     world.Step(timeStep, vel_iters, pos_iters)
@@ -407,5 +409,6 @@ while ev.type != pygame.QUIT:
     ev = pygame.event.poll()
     pyg()
     if mode == "game":
-        gamePhysics()
+        boxPhysics()
+        pass
 pygame.quit()
